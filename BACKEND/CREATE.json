@@ -1,0 +1,666 @@
+{
+  "name": "CREATE",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1760,
+        112
+      ],
+      "id": "f2eb88c4-ce98-4ffc-baca-78f243b40308",
+      "name": "Workflow Trigger"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "patient_name",
+              "name": "patient_name",
+              "value": "={{ $json.arguments.patient_name }}",
+              "type": "string"
+            },
+            {
+              "id": "service_type",
+              "name": "service_type",
+              "value": "={{ $json.arguments.service_type }}",
+              "type": "string"
+            },
+            {
+              "id": "preferred_date",
+              "name": "preferred_date",
+              "value": "={{ $json.arguments.preferred_date }}",
+              "type": "string"
+            },
+            {
+              "id": "preferred_time",
+              "name": "preferred_time",
+              "value": "={{ $json.arguments.preferred_time }}",
+              "type": "string"
+            },
+            {
+              "id": "notes",
+              "name": "notes",
+              "value": "={{ $json.arguments.notes || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "tool_call_id",
+              "name": "tool_call_id",
+              "value": "={{ $json.tool_call_id }}",
+              "type": "string"
+            },
+            {
+              "id": "phone_number",
+              "name": "phone_number",
+              "value": "={{ $json.arguments.phone_number || $json.customer_number || ('+407' + DateTime.now().toMillis().toString().slice(-8)) }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -1536,
+        112
+      ],
+      "id": "82871fc5-789e-4d8c-8475-4b3ef0dfc595",
+      "name": "Normalize Input",
+      "notes": "Phone number: uses mock for web calls (test mode)"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.patient_name }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            },
+            {
+              "leftValue": "={{ $json.service_type }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            },
+            {
+              "leftValue": "={{ $json.preferred_date }}",
+              "rightValue": "^\\d{4}-\\d{2}-\\d{2}$",
+              "operator": {
+                "type": "string",
+                "operation": "regex"
+              }
+            },
+            {
+              "leftValue": "={{ $json.preferred_time }}",
+              "rightValue": "^\\d{2}:\\d{2}$",
+              "operator": {
+                "type": "string",
+                "operation": "regex"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1312,
+        112
+      ],
+      "id": "1df6101f-5cdc-4625-99eb-59a66e49d0ab",
+      "name": "Validate Required Fields"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "error_response",
+              "name": "results",
+              "value": "={{ [{\"toolCallId\": $json.tool_call_id, \"result\": \"Lipsesc informații obligatorii. Verificați: nume, serviciu, dată (YYYY-MM-DD) și oră (HH:MM).\"}] }}",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        704,
+        400
+      ],
+      "id": "cba3d148-6fe4-4e9f-a6eb-e97659ff772d",
+      "name": "Error: Missing Fields"
+    },
+    {
+      "parameters": {
+        "jsCode": "// BUSINESS VALIDATION: date/time rules, working hours, past dates\nconst data = $input.item.json;\nconst now = new Date();\nconst bucharestTime = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Bucharest' }));\nconst selectedDate = new Date(data.preferred_date + 'T12:00:00');\nconst [hour, minute] = data.preferred_time.split(':').map(Number);\n\nconst errors = [];\n\n// 1. Check past date\nconst today = new Date(bucharestTime.getFullYear(), bucharestTime.getMonth(), bucharestTime.getDate());\nif (selectedDate < today) {\n  errors.push('Data selectată este în trecut');\n}\n\n// 2. Check weekend\nconst dayOfWeek = selectedDate.getDay();\nif (dayOfWeek === 0 || dayOfWeek === 6) {\n  errors.push('Clinica este închisă în weekend. Programul: Luni-Vineri');\n}\n\n// 3. Check working hours (09:00-18:00)\nif (hour < 9 || hour >= 18) {\n  errors.push('Programul clinicii: nouă - optsprezece');\n}\n\n// 4. Check 30-minute slots\nif (minute !== 0 && minute !== 30) {\n  errors.push('Programări doar la ore întregi sau la jumătate (09:00, 09:30, etc)');\n}\n\n// 5. Check if time is in past for today\nif (selectedDate.getTime() === today.getTime()) {\n  const requestedDateTime = new Date(bucharestTime);\n  requestedDateTime.setHours(hour, minute, 0, 0);\n  if (requestedDateTime <= bucharestTime) {\n    const nextHour = bucharestTime.getHours() + 2;\n    errors.push(`Ora ${data.preferred_time} a trecut. Alegeți după ora ${nextHour.toString().padStart(2, '0')}:00`);\n  }\n}\n\nif (errors.length > 0) {\n  return {\n    json: {\n      valid: false,\n      error_message: errors.join('. ') + '.'\n    }\n  };\n}\n\n// Calculate end time (1 hour appointment)\nconst endHour = (hour + 1).toString().padStart(2, '0');\nconst endMinute = minute.toString().padStart(2, '0');\n\nreturn {\n  json: {\n    valid: true,\n    patient_name: data.patient_name,\n    service_type: data.service_type,\n    phone_number: data.phone_number,\n    notes: data.notes,\n    preferred_date: data.preferred_date,\n    preferred_time: data.preferred_time,\n    startDateTime: `${data.preferred_date}T${data.preferred_time}:00`,\n    endDateTime: `${data.preferred_date}T${endHour}:${endMinute}:00`,\n    timeZone: 'Europe/Bucharest',\n    summary: `${data.service_type} - ${data.patient_name}`,\n    description: `Telefon: ${data.phone_number}\\nServiciu: ${data.service_type}\\nNote: ${data.notes || 'N/A'}`,\n    tool_call_id: data.tool_call_id\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1088,
+        16
+      ],
+      "id": "dc974f33-32c7-4d4d-8b0f-78becb626f8f",
+      "name": "Validate Business Rules",
+      "notes": "Date/time validation, working hours, past dates"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -864,
+        16
+      ],
+      "id": "75e4b8f1-74a1-4180-b844-87d75f73ebec",
+      "name": "Check Validation"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "business_error",
+              "name": "results",
+              "value": "={{ [{\"toolCallId\": $('Normalize Input').item.json.tool_call_id, \"result\": $json.error_message}] }}",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        704,
+        208
+      ],
+      "id": "cb170bcb-8e5c-436f-bc39-3aa87a35eec8",
+      "name": "Error: Business Rules"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "94781b1e7a82ae7f6243aa1aa3e5482b972c650d03d7b4e87ac944a26ad61e23@group.calendar.google.com",
+          "mode": "list",
+          "cachedResultName": "Clinica DIamed"
+        },
+        "limit": 20,
+        "timeMin": "={{ $json.preferred_date }}T00:00:00",
+        "timeMax": "={{ $json.preferred_date }}T23:59:59",
+        "options": {
+          "orderBy": "startTime",
+          "timeZone": {
+            "__rl": true,
+            "value": "Europe/Bucharest",
+            "mode": "list"
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        -640,
+        -80
+      ],
+      "id": "2d4e15b6-1ed8-466b-bd64-4ae1cb96dd8c",
+      "name": "Get Events for Day",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "7sGhIOmHhIvV51eV",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// CONFLICT DETECTION (optimized)\nconst appointmentData = $('Validate Business Rules').item.json;\nconst allEvents = $input.all();\n\n// Check if no events (empty array or single empty object)\nconst hasEvents = allEvents.length > 0 && !(allEvents.length === 1 && Object.keys(allEvents[0].json).length === 0);\n\nif (!hasEvents) {\n  return {\n    json: {\n      conflict: false,\n      slot_available: true,\n      ...appointmentData\n    }\n  };\n}\n\nconst [reqHour, reqMin] = appointmentData.preferred_time.split(':').map(Number);\nconst requestedStartMinutes = reqHour * 60 + reqMin;\nconst requestedEndMinutes = requestedStartMinutes + 60;\n\nfor (const item of allEvents) {\n  const event = item.json;\n  if (!event.start?.dateTime) continue;\n  \n  // Parse event time (direct from ISO string, timezone-safe)\n  const eventTimePart = event.start.dateTime.split('T')[1].split('+')[0].split('-')[0];\n  const [eventHour, eventMin] = eventTimePart.split(':').map(Number);\n  const eventStartMinutes = eventHour * 60 + eventMin;\n  \n  const eventEndTimePart = event.end.dateTime.split('T')[1].split('+')[0].split('-')[0];\n  const [eventEndHour, eventEndMin] = eventEndTimePart.split(':').map(Number);\n  const eventEndMinutes = eventEndHour * 60 + eventEndMin;\n  \n  // Check overlap\n  const overlaps = requestedStartMinutes < eventEndMinutes && requestedEndMinutes > eventStartMinutes;\n  \n  if (overlaps) {\n    return {\n      json: {\n        conflict: true,\n        slot_available: false,\n        conflict_message: `Ora ${appointmentData.preferred_time} este deja ocupată. Alegeți altă oră.`,\n        tool_call_id: appointmentData.tool_call_id\n      }\n    };\n  }\n}\n\nreturn {\n  json: {\n    conflict: false,\n    slot_available: true,\n    ...appointmentData\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -416,
+        -80
+      ],
+      "id": "700babf7-70b1-4390-82c6-040b0a42ec70",
+      "name": "Check Slot Conflicts",
+      "notes": "Detects time overlaps with existing appointments"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.slot_available }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -192,
+        -80
+      ],
+      "id": "9e4194d4-4375-41ac-9f79-a7be0007a158",
+      "name": "Is Slot Available?"
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "value": "94781b1e7a82ae7f6243aa1aa3e5482b972c650d03d7b4e87ac944a26ad61e23@group.calendar.google.com",
+          "mode": "list",
+          "cachedResultName": "Clinica DIamed"
+        },
+        "start": "={{ $json.startDateTime }}",
+        "end": "={{ $json.endDateTime }}",
+        "useDefaultReminders": false,
+        "additionalFields": {
+          "description": "={{ $json.description }}",
+          "summary": "={{ $json.summary }}"
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        32,
+        -176
+      ],
+      "id": "70f1d7a3-7977-4dfb-8fbd-f6aacfdec49d",
+      "name": "Create Calendar Event",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "7sGhIOmHhIvV51eV",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "success_response",
+              "name": "results",
+              "value": "={{ [{\"toolCallId\": $('Check Slot Conflicts').item.json.tool_call_id, \"result\": `Programarea confirmată pentru ${$('Check Slot Conflicts').item.json.patient_name}, ${$('Check Slot Conflicts').item.json.service_type}, ${$('Check Slot Conflicts').item.json.preferred_date} la ora ${$('Check Slot Conflicts').item.json.preferred_time}. Veți primi SMS de confirmare.`}] }}",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        704,
+        -176
+      ],
+      "id": "a2440bdb-82fe-4abc-8f74-d507de19d826",
+      "name": "Success Response"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "conflict_response",
+              "name": "results",
+              "value": "={{ [{\"toolCallId\": $json.tool_call_id, \"result\": $json.conflict_message}] }}",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        704,
+        16
+      ],
+      "id": "e124751c-f55e-4ba5-8edf-fd28b20f15f5",
+      "name": "Conflict Response"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        928,
+        112
+      ],
+      "id": "b976ffbe-1d8f-46f8-a00d-615b897e9c27",
+      "name": "Merge All Outputs",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "51cc6985-1e12-440d-99f6-8759f53eeb90",
+              "name": "sms_to",
+              "value": "={{ $('Check Slot Conflicts').item.json.phone_number }}",
+              "type": "string"
+            },
+            {
+              "id": "85a39d27-9791-4864-b5f5-f2e09b73311a",
+              "name": "patient_name_formatted",
+              "value": "={{ $('Check Slot Conflicts').item.json.patient_name }}",
+              "type": "string"
+            },
+            {
+              "id": "fc355469-00cb-4b9b-a767-930839a7f814",
+              "name": "date_formatted",
+              "value": "={{ DateTime.fromISO($('Check Slot Conflicts').item.json.preferred_date).setLocale('ro').toFormat('EEEE, dd MMMM yyyy') }}",
+              "type": "string"
+            },
+            {
+              "id": "cf9a2669-8480-4b06-98f9-fae40e2b2ac2",
+              "name": "time_formatted",
+              "value": "={{ $('Check Slot Conflicts').item.json.preferred_time }}",
+              "type": "string"
+            },
+            {
+              "id": "e2362f8e-6323-458b-b546-b7de8d4db289",
+              "name": "service_formatted",
+              "value": "={{ $('Check Slot Conflicts').item.json.service_type }}",
+              "type": "string"
+            },
+            {
+              "id": "5983f247-b799-40c9-9bb7-36f6ba032f61",
+              "name": "sms_body",
+              "value": "=Confirmare Clinica Dr. Șerban:\n📅 ${date_formatted}\n⏰ ${time_formatted}\n🦷 ${service_formatted}\n\nPentru reprogramare: anulați apoi creați programare nouă.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        272,
+        -448
+      ],
+      "id": "64c1773c-e037-41ed-bae2-5ed443c6879a",
+      "name": "Prepare SMS Data",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "from": "+40373811265",
+        "to": "={{ $json.sms_to }}",
+        "message": "={{ $json.sms_body }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        496,
+        -448
+      ],
+      "id": "b9b46329-fd12-42a6-89ba-b69c2f1ebc90",
+      "name": "Send SMS via Twilio",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "credentials": {
+        "twilioApi": {
+          "id": "quflI7Osk8wGy2w9",
+          "name": "Twilio account"
+        }
+      },
+      "disabled": true
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Normalize Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Input": {
+      "main": [
+        [
+          {
+            "node": "Validate Required Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Required Fields": {
+      "main": [
+        [
+          {
+            "node": "Validate Business Rules",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error: Missing Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error: Missing Fields": {
+      "main": [
+        [
+          {
+            "node": "Merge All Outputs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Business Rules": {
+      "main": [
+        [
+          {
+            "node": "Check Validation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Validation": {
+      "main": [
+        [
+          {
+            "node": "Get Events for Day",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error: Business Rules",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error: Business Rules": {
+      "main": [
+        [
+          {
+            "node": "Merge All Outputs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Events for Day": {
+      "main": [
+        [
+          {
+            "node": "Check Slot Conflicts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Slot Conflicts": {
+      "main": [
+        [
+          {
+            "node": "Is Slot Available?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Slot Available?": {
+      "main": [
+        [
+          {
+            "node": "Create Calendar Event",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Conflict Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Calendar Event": {
+      "main": [
+        [
+          {
+            "node": "Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Success Response": {
+      "main": [
+        [
+          {
+            "node": "Merge All Outputs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Conflict Response": {
+      "main": [
+        [
+          {
+            "node": "Merge All Outputs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare SMS Data": {
+      "main": [
+        [
+          {
+            "node": "Send SMS via Twilio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send SMS via Twilio": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "fd521f2b-642d-4bd1-85a2-7fd8939d6bcf",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "8b288455c98dd89b1683c1f42341ee1e9b37a04d731a8c359e81baed65b07cec"
+  },
+  "id": "GTrXwIofc21r4dPv",
+  "tags": []
+}

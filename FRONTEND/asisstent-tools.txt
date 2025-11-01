@@ -1,0 +1,112 @@
+FUNCȚII CUSTOM PENTRU VAPI - CLINICA DENTARĂ
+================================================
+
+FUNCȚIA 1
+-----------------------------------------------
+Nume: create_appointment
+Descriere: Creează o programare nouă la clinica dentară. Folosește această funcție DOAR după ce ai colectat TOATE informațiile necesare de la pacient: numele complet, tipul de serviciu dorit, și data/ora preferată. Numărul de telefon este automat (nu trebuie colectat).
+
+API Endpoint: POST
+URL: https://shadow424.app.n8n.cloud/webhook/appointment-functions
+Timeout: 20s
+
+Parameters (JSON Schema):
+{
+  "type": "object",
+  "properties": {
+    "notes": {
+      "description": "Note opționale despre programare (ex: 'prima vizită', 'durere molar stânga', 'pacient anxios')",
+      "type": "string"
+    },
+    "patient_name": {
+      "description": "Numele complet al pacientului (ex: Ion Popescu). Asigură-te că ai înțeles corect numele.",
+      "type": "string"
+    },
+    "phone_number": {
+      "description": "!!! ACEST CÂMP NU SE CERE. Este doar pentru testare din chat. Numărul real vine automat.",
+      "type": "string"
+    },
+    "service_type": {
+      "description": "Tipul de serviciu dentar solicitat",
+      "type": "string",
+      "enum": [
+        "Consultație",
+        "Igienizare",
+        "Extracție",
+        "Tratament canal",
+        "Implant",
+        "Proteză",
+        "Ortodonție",
+        "Albire",
+        "Detartraj",
+        "Plombă"
+      ]
+    },
+    "preferred_date": {
+      "description": "Data dorită pentru programare în format YYYY-MM-DD (ex: 2025-10-30). Dacă pacientul spune 'mâine', 'luni viitoare', calculează data corectă.",
+      "type": "string"
+    },
+    "preferred_time": {
+      "description": "Ora dorită pentru programare în format HH:MM (ex: 14:00, 09:30). Acceptă doar ore întregi sau la jumătate (09:00, 09:30, 10:00, etc). Program clinică: 09:00-18:00.",
+      "type": "string"
+    }
+  },
+  "required": [
+    "patient_name",
+    "service_type",
+    "preferred_date",
+    "preferred_time"
+  ]
+}
+
+FUNCȚIA 2
+-----------------------------------------------
+Nume: check_availability_appointment
+Descriere: Verifică disponibilitatea programărilor pentru o anumită zi. Folosește această funcție DOAR dacă pacientul întreabă "ce ore aveți libere?" sau nu știe o oră anume. Returnează o listă cu toate slot-urile disponibile (la fiecare 30 min) pentru ziua respectivă, grupate pe perioade (dimineață 09:00-12:00, după-amiază 12:00-17:00, seară 17:00-18:00).
+
+API Endpoint: POST
+URL: https://shadow424.app.n8n.cloud/webhook/appointment-functions
+Timeout: 20s
+
+Parameters (JSON Schema):
+{
+  "type": "object",
+  "properties": {
+    "date": {
+      "description": "Data pentru care verifici disponibilitatea, în format YYYY-MM-DD (ex: 2025-10-30). Dacă pacientul spune 'mâine', 'vineri', calculează data corectă în funcție de ziua curentă.",
+      "type": "string"
+    }
+  },
+  "required": [
+    "date"
+  ]
+}
+
+FUNCȚIA 3
+-----------------------------------------------
+Nume: cancel_appointment
+Descriere: Anulează o programare existentă. Caută programarea după numele pacientului și numărul de telefon. IMPORTANT: Confirmă cu pacientul înainte de anulare! Spune-i detaliile programării găsite (data, ora, serviciu) și întreabă 'Sigur doriți să anulați această programare?'
+
+API Endpoint: POST
+URL: https://shadow424.app.n8n.cloud/webhook/appointment-functions
+Timeout: 20s
+
+Parameters (JSON Schema):
+{
+  "type": "object",
+  "properties": {
+    "patient_name": {
+      "description": "Numele complet al pacientului (ex: Ion Popescu). Trebuie să fie exact cum a fost introdus la programare.",
+      "type": "string"
+    },
+    "phone_number": {
+      "description": "Numărul de telefon al pacientului (ex: 0722123456). Folosit pentru identificare precisă a programării.",
+      "type": "string"
+    }
+  },
+  "required": [
+    "patient_name",
+    "phone_number"
+  ]
+}
+

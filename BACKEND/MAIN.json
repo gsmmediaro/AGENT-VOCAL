@@ -1,0 +1,359 @@
+{
+  "name": "MAIN",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "appointment-functions",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -272,
+        112
+      ],
+      "id": "46a4024e-7670-4b8f-a43b-7dc39b14cb7b",
+      "name": "Webhook",
+      "webhookId": "e7c5c666-7d50-4c5d-a1c6-63e64cad5d8d"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "function_name",
+              "name": "function_name",
+              "value": "={{ $json.body.message.toolCalls[0].function.name }}",
+              "type": "string"
+            },
+            {
+              "id": "arguments",
+              "name": "arguments",
+              "value": "={{ $json.body.message.toolCalls[0].function.arguments }}",
+              "type": "object"
+            },
+            {
+              "id": "tool_call_id",
+              "name": "tool_call_id",
+              "value": "={{ $json.body.message.toolCalls[0].id }}",
+              "type": "string"
+            },
+            {
+              "id": "call_id",
+              "name": "call_id",
+              "value": "={{ $json.body.message.call.id }}",
+              "type": "string"
+            },
+            {
+              "id": "b2d0d98a-6873-431b-a146-45f09fa1567b",
+              "name": "customer_number",
+              "value": "={{ $json.body.message.call.customer.number }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -48,
+        112
+      ],
+      "id": "7450d231-265f-46b7-9b07-0e0f531c9985",
+      "name": "Extract Vapi Data",
+      "notes": "Extrage datele din payload-ul Vapi.ai (toolCalls structure)"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.function_name }}",
+                    "rightValue": "create_appointment",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "0d802137-c385-45eb-8852-317f0c7e8484"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Create"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.function_name }}",
+                    "rightValue": "check_availability",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "dc14f348-cd8e-4436-8cd3-78c9db1e8564"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Check"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.function_name }}",
+                    "rightValue": "cancel_appointment",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "4df1e346-2dcc-4592-a531-c6f758d468f2"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Cancel"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.3,
+      "position": [
+        176,
+        96
+      ],
+      "id": "1797195d-1455-4a43-acd4-b06d31664bba",
+      "name": "Route by Function"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "GTrXwIofc21r4dPv",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/GTrXwIofc21r4dPv",
+          "cachedResultName": "CREATE"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        400,
+        -80
+      ],
+      "id": "535c7966-6b63-43a0-a35c-6593e256c704",
+      "name": "Execute Create Appointment",
+      "notes": "Calls sub-workflow for appointment creation"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "PuW0xY3KeL2Xj2o5",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/PuW0xY3KeL2Xj2o5",
+          "cachedResultName": "CHECK"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        400,
+        112
+      ],
+      "id": "155815b6-ca76-427c-b024-0ab2c030f498",
+      "name": "Execute Check Availability"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "zW7aEqe1RBAcRuft",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/zW7aEqe1RBAcRuft",
+          "cachedResultName": "CANCEL"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        400,
+        304
+      ],
+      "id": "a5ada18b-9a8e-4205-91b9-c469db2b70fa",
+      "name": "Execute Cancel Appointment"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        624,
+        112
+      ],
+      "id": "72f823c9-a7db-4c12-947b-75fec7445ca4",
+      "name": "Respond to Webhook",
+      "notes": "Returns {results: [{toolCallId, result}]} to Vapi.ai"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Extract Vapi Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Vapi Data": {
+      "main": [
+        [
+          {
+            "node": "Route by Function",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Function": {
+      "main": [
+        [
+          {
+            "node": "Execute Create Appointment",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Execute Check Availability",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Execute Cancel Appointment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Create Appointment": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Check Availability": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Cancel Appointment": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "9c655804-6298-4af2-9c68-c5589edaea9d",
+  "meta": {
+    "instanceId": "8b288455c98dd89b1683c1f42341ee1e9b37a04d731a8c359e81baed65b07cec"
+  },
+  "id": "r642QRomKOxsz8hE",
+  "tags": []
+}

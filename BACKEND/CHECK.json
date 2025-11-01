@@ -1,0 +1,251 @@
+{
+  "name": "CHECK",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        -656,
+        96
+      ],
+      "id": "aa67f532-f175-4e32-8af5-41ba6830e3ad",
+      "name": "Workflow Trigger"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "date",
+              "name": "date",
+              "value": "={{ $json.arguments.date }}",
+              "type": "string"
+            },
+            {
+              "id": "tool_call_id",
+              "name": "tool_call_id",
+              "value": "={{ $json.tool_call_id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -432,
+        96
+      ],
+      "id": "1cd9286a-78f0-44e0-9595-3adcf09f9bae",
+      "name": "Normalize Input"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.date }}",
+              "rightValue": "^\\d{4}-\\d{2}-\\d{2}$",
+              "operator": {
+                "type": "string",
+                "operation": "regex"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -208,
+        96
+      ],
+      "id": "48bda6f5-8bd5-4d2f-abdd-e1efc6c85ed9",
+      "name": "Validate Date Format"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "error",
+              "name": "results",
+              "value": "={{ [{\"toolCallId\": $json.tool_call_id, \"result\": \"Format dată invalid. Folosiți anul-luna-ziua (ex: 2025-10-30).\"}] }}",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        240,
+        192
+      ],
+      "id": "ff06875e-ddaa-4dad-a51b-362ec28cdf54",
+      "name": "Error: Invalid Date"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "94781b1e7a82ae7f6243aa1aa3e5482b972c650d03d7b4e87ac944a26ad61e23@group.calendar.google.com",
+          "mode": "list",
+          "cachedResultName": "Clinica DIamed"
+        },
+        "limit": 100,
+        "timeMin": "={{ $json.date }}T00:00:00",
+        "timeMax": "={{ $json.date }}T23:59:59",
+        "options": {
+          "orderBy": "startTime",
+          "timeZone": {
+            "__rl": true,
+            "value": "Europe/Bucharest",
+            "mode": "list"
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        16,
+        0
+      ],
+      "id": "d66a960c-4401-4ab7-9207-4a1e9c08e2ea",
+      "name": "Get Events",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "7sGhIOmHhIvV51eV",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// CALCULATE FREE SLOTS (optimized with batching support)\nconst events = $input.all();\nconst dateStr = $('Normalize Input').item.json.date;\nconst toolCallId = $('Normalize Input').item.json.tool_call_id;\n\nconst workStart = 9;\nconst workEnd = 18;\nconst allSlots = [];\n\n// Generate all 30-minute slots\nfor (let hour = workStart; hour < workEnd; hour++) {\n  for (let minute of [0, 30]) {\n    if (hour === 17 && minute === 30) break; // Last slot is 17:00\n    \n    const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;\n    const timeInMinutes = hour * 60 + minute;\n    \n    allSlots.push({\n      time: timeStr,\n      minutes: timeInMinutes,\n      available: true\n    });\n  }\n}\n\n// Mark busy slots based on existing events\nevents.forEach(event => {\n  const eventData = event.json;\n  if (!eventData.start?.dateTime) return;\n  \n  const timePart = eventData.start.dateTime.split('T')[1].split('+')[0].split('-')[0];\n  const [hourStr, minuteStr] = timePart.split(':');\n  const eventMinutes = parseInt(hourStr) * 60 + parseInt(minuteStr);\n  \n  // Mark slot and next slot as busy (1-hour appointments)\n  allSlots.forEach(slot => {\n    if (slot.minutes >= eventMinutes && slot.minutes < eventMinutes + 60) {\n      slot.available = false;\n    }\n  });\n});\n\nconst freeSlots = allSlots.filter(s => s.available).map(s => s.time);\n\n// Format message for voice (numbers as words)\nconst timeMapping = {\n  '09:00': 'nouă', '09:30': 'nouă și treizeci',\n  '10:00': 'zece', '10:30': 'zece și treizeci',\n  '11:00': 'unsprezece', '11:30': 'unsprezece și treizeci',\n  '12:00': 'douăsprezece', '12:30': 'douăsprezece și treizeci',\n  '13:00': 'treisprezece', '13:30': 'treisprezece și treizeci',\n  '14:00': 'paisprezece', '14:30': 'paisprezece și treizeci',\n  '15:00': 'cincisprezece', '15:30': 'cincisprezece și treizeci',\n  '16:00': 'șaisprezece', '16:30': 'șaisprezece și treizeci',\n  '17:00': 'șaptesprezece'\n};\n\nconst voiceSlots = freeSlots.map(time => timeMapping[time] || time);\n\nconst message = freeSlots.length > 0\n  ? `Pentru ${dateStr} avem ${freeSlots.length} slot-uri disponibile: ${voiceSlots.join(', ')}.`\n  : `Pentru ${dateStr} nu mai avem slot-uri disponibile. Alegeți altă zi.`;\n\nreturn {\n  json: {\n    results: [\n      {\n        toolCallId: toolCallId,\n        result: message\n      }\n    ],\n    date: dateStr,\n    free_slots: freeSlots,\n    total_free: freeSlots.length\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ],
+      "id": "d7a97678-2635-41ec-a635-48c743658a19",
+      "name": "Calculate Free Slots",
+      "notes": "Batching-ready, formats times as words for voice"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        464,
+        96
+      ],
+      "id": "9cb2e161-a34c-4b5d-97c9-135892011c8b",
+      "name": "Merge Outputs"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Normalize Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Input": {
+      "main": [
+        [
+          {
+            "node": "Validate Date Format",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Date Format": {
+      "main": [
+        [
+          {
+            "node": "Get Events",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error: Invalid Date",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error: Invalid Date": {
+      "main": [
+        [
+          {
+            "node": "Merge Outputs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Events": {
+      "main": [
+        [
+          {
+            "node": "Calculate Free Slots",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Free Slots": {
+      "main": [
+        [
+          {
+            "node": "Merge Outputs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "86de9f8c-f820-42f0-a352-cb3452b6fd7f",
+  "meta": {
+    "instanceId": "8b288455c98dd89b1683c1f42341ee1e9b37a04d731a8c359e81baed65b07cec"
+  },
+  "id": "PuW0xY3KeL2Xj2o5",
+  "tags": []
+}

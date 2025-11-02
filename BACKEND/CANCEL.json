@@ -149,7 +149,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// ANTI-TROLL: Verifică că numărul apelant = numărul din programare\nconst events = $input.all();\nconst searchData = $('Normalize Input').first().json;\nconst callerNumber = searchData.phone_number.replace(/\\s/g, '').replace(/^\\+/, '');\nconst searchName = searchData.patient_name.toLowerCase();\n\nfor (const event of events) {\n  const eventData = event.json;\n  const summary = (eventData.summary || '').toLowerCase();\n  const description = (eventData.description || '').toLowerCase();\n  \n  // Match by name in title\n  if (summary.includes(searchName)) {\n    // Extract phone from event description\n    const phoneMatch = description.match(/telefon[:\\s]+([+\\d\\s]+)/i);\n    if (!phoneMatch) {\n      return {\n        json: {\n          found: false,\n          anti_troll_triggered: false,\n          tool_call_id: searchData.tool_call_id,\n          message: `Programarea pentru ${searchData.patient_name} nu conține număr de telefon.`\n        }\n      };\n    }\n    \n    const eventPhone = phoneMatch[1].replace(/\\s/g, '').replace(/^\\+/, '');\n    \n    // 🛡️ ANTI-TROLL: Verifică numărul apelant\n    if (callerNumber !== eventPhone) {\n      return {\n        json: {\n          found: false,\n          anti_troll_triggered: true,\n          caller_number: searchData.phone_number,\n          event_phone: phoneMatch[1],\n          patient_name: searchData.patient_name,\n          tool_call_id: searchData.tool_call_id,\n          message: `ALERTĂ SECURITATE: Cineva încearcă să anuleze programarea pentru ${searchData.patient_name} din numărul ${searchData.phone_number}, dar programarea e pe numărul ${phoneMatch[1]}.`\n        }\n      };\n    }\n    \n    // ✅ Numărul coincide - permite anularea\n    const timePart = eventData.start.dateTime.split('T')[1].split('+')[0].split('-')[0];\n    const [hour, minute] = timePart.split(':');\n    const datePart = eventData.start.dateTime.split('T')[0];\n    \n    return {\n      json: {\n        found: true,\n        anti_troll_triggered: false,\n        event_id: eventData.id,\n        summary: eventData.summary,\n        date: datePart,\n        time: `${hour}:${minute}`,\n        patient_name: searchData.patient_name,\n        phone_number: phoneMatch[1],\n        tool_call_id: searchData.tool_call_id\n      }\n    };\n  }\n}\n\nreturn {\n  json: {\n    found: false,\n    anti_troll_triggered: false,\n    tool_call_id: searchData.tool_call_id,\n    message: `Nu am găsit programare pentru ${searchData.patient_name}.`\n  }\n};"
+        "jsCode": "// ANTI-TROLL: Verifică că numărul apelant = numărul din programare\nconst events = $input.all();\nconst searchData = $('Normalize Input').first().json;\nconst callerNumber = searchData.phone_number.replace(/\\s/g, '').replace(/^\\+/, '');\nconst searchName = searchData.patient_name.toLowerCase();\n\nfor (const event of events) {\n  const eventData = event.json;\n  const summary = (eventData.summary || '').toLowerCase();\n  const description = (eventData.description || '').toLowerCase();\n  \n  // Match by name in title\n  if (summary.includes(searchName)) {\n    // Extract phone from event description\n    const phoneMatch = description.match(/telefon[:\\s]+([+\\d\\s]+)/i);\n    if (!phoneMatch) {\n      return {\n        json: {\n          found: false,\n          anti_troll_triggered: false,\n          tool_call_id: searchData.tool_call_id,\n          message: `Programarea pentru ${searchData.patient_name} nu conține număr de telefon.`\n        }\n      };\n    }\n    \n    const eventPhone = phoneMatch[1].replace(/\\s/g, '').replace(/^\\+/, '');\n    \n    // 🛡️ ANTI-TROLL: Verifică numărul apelant\n    if (callerNumber !== eventPhone) {\n      return {\n        json: {\n          found: false,\n          anti_troll_triggered: true,\n          caller_number: searchData.phone_number,\n          event_phone: phoneMatch[1],\n          patient_name: searchData.patient_name,\n          tool_call_id: searchData.tool_call_id,\n          message: `ALERTĂ SECURITATE: Cineva încearcă să anuleze programarea pentru ${searchData.patient_name} din numărul ${searchData.phone_number}, dar programarea e pe numărul ${phoneMatch[1]}.`\n        }\n      };\n    }\n    \n    // ✅ Numărul coincide - permite anularea\n    const timePart = eventData.start.dateTime.split('T')[1].split('+')[0].split('-')[0];\n    const [hour, minute] = timePart.split(':');\n    const datePart = eventData.start.dateTime.split('T')[0];\n    \n    return {\n      json: {\n        found: true,\n        anti_troll_triggered: false,\n        event_id: eventData.id,\n        summary: eventData.summary,\n        date: datePart,\n        time: `${hour}:${minute}`,\n        patient_name: searchData.patient_name, // ← IMPORTANT\n        phone_number: phoneMatch[1],\n        tool_call_id: searchData.tool_call_id  // ← IMPORTANT\n      }\n    };\n  }\n}\n\nreturn {\n  json: {\n    found: false,\n    anti_troll_triggered: false,\n    tool_call_id: searchData.tool_call_id,\n    message: `Nu am găsit programare pentru ${searchData.patient_name}.`\n  }\n};"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -206,7 +206,7 @@
       "type": "n8n-nodes-base.googleCalendar",
       "typeVersion": 1.3,
       "position": [
-        16,
+        224,
         -112
       ],
       "id": "b6d9d5c9-a6a4-4ba6-989f-fcaa09ec5ded",
@@ -225,7 +225,7 @@
             {
               "id": "success",
               "name": "results",
-              "value": "={{ [{\"toolCallId\": $('Filter Appointment').item.json.tool_call_id, \"result\": `Programarea pentru ${$('Normalize Input').item.json.patient_name} din data de ${$('Filter Appointment').item.json.date} la ora ${$('Filter Appointment').item.json.time} a fost anulată cu succes.`}] }}",
+              "value": "={{ [{\"toolCallId\": $json.tool_call_id, \"result\": \"Programarea a fost anulată cu succes pentru \" + $json.patient_name + \".\"}] }}",
               "type": "array"
             }
           ]
@@ -235,7 +235,7 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        688,
+        896,
         -112
       ],
       "id": "4006d22a-3fd7-4d1e-84a3-8ff989da5884",
@@ -258,7 +258,7 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        688,
+        896,
         80
       ],
       "id": "27ac0668-852f-40f2-990e-1860f816a054",
@@ -269,7 +269,7 @@
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3,
       "position": [
-        912,
+        1120,
         80
       ],
       "id": "a8f581bb-416d-4be1-a70c-6964d926e55c",
@@ -340,9 +340,71 @@
       "id": "2bbd1ed0-d7b2-480a-8ad1-c2849dfb7607",
       "name": "Prepare SMS Confirmare Anulare",
       "disabled": true
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ab85ccc7-dd67-44c1-aea9-e695dae2803a",
+              "name": "event_id",
+              "value": "={{ $json.event_id }}",
+              "type": "string"
+            },
+            {
+              "id": "feff1b0b-6ffe-4716-bfd9-529f4af4570d",
+              "name": "patient_name",
+              "value": "={{ $json.patient_name }}",
+              "type": "string"
+            },
+            {
+              "id": "8b9d652b-3890-4d77-b04b-653ae2a71d3d",
+              "name": "date",
+              "value": "={{ $json.date }}",
+              "type": "string"
+            },
+            {
+              "id": "f73234f3-7ced-4c46-9ffd-f5474357c95d",
+              "name": "time",
+              "value": "={{ $json.time }}",
+              "type": "string"
+            },
+            {
+              "id": "cabbdf5d-d9b4-49df-9dd7-48c581ef5860",
+              "name": "tool_call_id",
+              "value": "={{ $json.tool_call_id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        0,
+        -112
+      ],
+      "id": "d8d00917-7905-4937-bffc-56e471768435",
+      "name": "Prepare Delete Data"
     }
   ],
-  "pinData": {},
+  "pinData": {
+    "Workflow Trigger": [
+      {
+        "json": {
+          "function_name": "cancel_appointment",
+          "arguments": {
+            "patient_name": "Vasile Ștefan",
+            "phone_number": "0720496033"
+          },
+          "tool_call_id": "call_OWOFTUXvkLOGTaT7qxs5FJOa",
+          "call_id": "019a3e8d-9c4c-7334-8c86-70a514b4e109",
+          "customer_number": "+40720496033"
+        }
+      }
+    ]
+  },
   "connections": {
     "Workflow Trigger": {
       "main": [
@@ -421,7 +483,7 @@
       "main": [
         [
           {
-            "node": "Delete Appointment",
+            "node": "Prepare Delete Data",
             "type": "main",
             "index": 0
           }
@@ -483,13 +545,24 @@
           }
         ]
       ]
+    },
+    "Prepare Delete Data": {
+      "main": [
+        [
+          {
+            "node": "Delete Appointment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": false,
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "29740daf-4c06-4364-ad78-3c8f740776b5",
+  "versionId": "9dfe7f10-7280-4104-b5ff-4ed67000c54e",
   "meta": {
     "instanceId": "8b288455c98dd89b1683c1f42341ee1e9b37a04d731a8c359e81baed65b07cec"
   },

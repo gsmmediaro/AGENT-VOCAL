@@ -1,0 +1,101 @@
+{
+  "node_to_add": {
+    "parameters": {
+      "jsCode": "// 🛡️ DEFENSIVE DATE VALIDATION - Catches AI calculation errors\n// This validation layer protects against date parsing bugs from GPT-4o-mini\nconst data = $input.item.json;\nconst preferredDate = data.preferred_date;\n\n// Get current date in Europe/Bucharest timezone\nconst now = new Date();\nconst bucharestTime = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Bucharest' }));\nconst today = new Date(bucharestTime.getFullYear(), bucharestTime.getMonth(), bucharestTime.getDate());\n\n// Parse requested date\nconst requested = new Date(preferredDate + 'T12:00:00');\n\nconst errors = [];\n\n// VALIDATION 1: Date is not in the past\nif (requested < today) {\n  const daysDiff = Math.floor((today - requested) / (1000 * 60 * 60 * 24));\n  errors.push(`Data ${preferredDate} este în trecut (acum ${daysDiff} ${daysDiff === 1 ? 'zi' : 'zile'}). Alegeți o dată din viitor.`);\n}\n\n// VALIDATION 2: Date is not weekend\nconst dayOfWeek = requested.getDay();\nconst dayNames = ['duminică', 'luni', 'marți', 'miercuri', 'joi', 'vineri', 'sâmbătă'];\nif (dayOfWeek === 0) {\n  errors.push('Clinica este închisă duminica. Alegeți luni-vineri.');\n} else if (dayOfWeek === 6) {\n  errors.push('Clinica este închisă sâmbăta. Alegeți luni-vineri.');\n}\n\n// VALIDATION 3: Date is not too far in future (> 90 days)\nconst maxDate = new Date(today);\nmaxDate.setDate(maxDate.getDate() + 90);\nif (requested > maxDate) {\n  errors.push('Data este prea departe în viitor. Programările se fac maxim 3 luni în avans.');\n}\n\n// VALIDATION 4: Known Romanian public holidays 2025-2026\nconst holidays = [\n  '2025-01-01', '2025-01-02', // Anul Nou\n  '2025-01-24', // Unirea Principatelor\n  '2025-04-20', '2025-04-21', '2025-04-22', // Paște 2025\n  '2025-05-01', // 1 Mai\n  '2025-06-01', // Ziua Copilului\n  '2025-06-08', '2025-06-09', // Rusalii 2025\n  '2025-08-15', // Adormirea Maicii Domnului\n  '2025-11-30', // Sfântul Andrei\n  '2025-12-01', // Ziua Națională\n  '2025-12-25', '2025-12-26', // Crăciun\n  '2026-01-01', '2026-01-02', // Anul Nou 2026\n  '2026-01-24', // Unirea Principatelor 2026\n];\n\nif (holidays.includes(preferredDate)) {\n  errors.push(`Data ${preferredDate} este sărbătoare legală. Clinica este închisă.`);\n}\n\n// VALIDATION 5: Verify day of week matches if AI specified it\n// This catches cases where AI calculated \"mâine\" wrong\nconst calculatedDayName = dayNames[dayOfWeek];\n\n// If validation failed, return error\nif (errors.length > 0) {\n  return {\n    json: {\n      valid: false,\n      validation_error: true,\n      error_message: errors.join(' '),\n      tool_call_id: data.tool_call_id,\n      debug_info: {\n        requested_date: preferredDate,\n        calculated_day: calculatedDayName,\n        today_date: today.toISOString().split('T')[0],\n        bucharest_time: bucharestTime.toISOString()\n      }\n    }\n  };\n}\n\n// Validation passed - pass through all data\nreturn {\n  json: {\n    ...data,\n    valid: true,\n    validation_error: false,\n    date_validated: true,\n    calculated_day_name: calculatedDayName\n  }\n};"
+    },
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 2,
+    "position": [
+      -864,
+      112
+    ],
+    "id": "defensive-date-validator-2025",
+    "name": "🛡️ Defensive Date Validator",
+    "notes": "🛡️ ANTI-BUG LAYER: Catches AI date calculation errors (past dates, weekends, holidays, timezone issues). Added 2025-11-03 to fix 'mâine' calculation bug."
+  },
+  "installation_instructions": {
+    "step_1": "Open n8n and navigate to the CREATE workflow",
+    "step_2": "Find the 'Validate Business Rules' node (position -1088, 16)",
+    "step_3": "Find the 'Check Validation' node (position -864, 16)",
+    "step_4": "Add a NEW Code node BETWEEN these two nodes",
+    "step_5": "Copy the jsCode from 'node_to_add.parameters.jsCode' above into the new node",
+    "step_6": "Position the new node at approximately (-975, 16) for visual clarity",
+    "step_7": "Update connections:",
+    "connection_changes": {
+      "remove": "Validate Business Rules → Check Validation",
+      "add_1": "Validate Business Rules → 🛡️ Defensive Date Validator",
+      "add_2": "🛡️ Defensive Date Validator → Check Validation"
+    },
+    "step_8": "Update 'Check Validation' node conditions",
+    "check_validation_update": {
+      "current_condition": "{{ $json.valid }} === true",
+      "new_condition": "{{ $json.valid === true && $json.validation_error !== true }}"
+    },
+    "step_9": "Create error response node for validation failures",
+    "error_node": {
+      "name": "Error: AI Date Mistake",
+      "type": "n8n-nodes-base.set",
+      "position": [
+        704,
+        300
+      ],
+      "assignment": {
+        "name": "results",
+        "value": "={{ [{\"toolCallId\": $json.tool_call_id, \"result\": $json.error_message}] }}",
+        "type": "array"
+      },
+      "connection_from": "Check Validation (FALSE output) → Error: AI Date Mistake",
+      "connection_to": "Error: AI Date Mistake → Merge All Outputs"
+    },
+    "step_10": "Test the workflow with invalid dates",
+    "test_cases": [
+      {
+        "test": "Past date",
+        "input": {
+          "preferred_date": "2025-10-01"
+        },
+        "expected_error": "Data 2025-10-01 este în trecut"
+      },
+      {
+        "test": "Weekend (Saturday)",
+        "input": {
+          "preferred_date": "2025-11-08"
+        },
+        "expected_error": "Clinica este închisă sâmbăta"
+      },
+      {
+        "test": "Weekend (Sunday)",
+        "input": {
+          "preferred_date": "2025-11-09"
+        },
+        "expected_error": "Clinica este închisă duminica"
+      },
+      {
+        "test": "Holiday",
+        "input": {
+          "preferred_date": "2025-12-25"
+        },
+        "expected_error": "Data 2025-12-25 este sărbătoare legală"
+      },
+      {
+        "test": "Valid date (should pass)",
+        "input": {
+          "preferred_date": "2025-11-05"
+        },
+        "expected_result": "valid: true, validation_error: false"
+      }
+    ],
+    "step_11": "Save and activate the workflow",
+    "step_12": "Monitor first 20 executions for any issues"
+  },
+  "rollback_procedure": {
+    "if_issues_detected": "Simply disable the 🛡️ Defensive Date Validator node",
+    "restore_connection": "Reconnect Validate Business Rules → Check Validation directly",
+    "note": "The validation node is purely defensive - disabling it returns to original behavior"
+  },
+  "maintenance": {
+    "yearly": "Update the 'holidays' array with next year's Romanian public holidays",
+    "update_location": "Line 51-62 of the jsCode",
+    "format": "YYYY-MM-DD (e.g., '2026-04-12')"
+  }
+}

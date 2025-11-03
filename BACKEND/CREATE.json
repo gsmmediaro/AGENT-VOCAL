@@ -152,7 +152,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// BUSINESS VALIDATION: date/time rules, working hours, past dates\nconst data = $input.item.json;\nconst now = new Date();\nconst bucharestTime = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Bucharest' }));\nconst selectedDate = new Date(data.preferred_date + 'T12:00:00');\nconst [hour, minute] = data.preferred_time.split(':').map(Number);\n\nconst errors = [];\n\n// 1. Check past date\nconst today = new Date(bucharestTime.getFullYear(), bucharestTime.getMonth(), bucharestTime.getDate());\nif (selectedDate < today) {\n  errors.push('Data selectată este în trecut');\n}\n\n// 2. Check weekend\nconst dayOfWeek = selectedDate.getDay();\nif (dayOfWeek === 0 || dayOfWeek === 6) {\n  errors.push('Clinica este închisă în weekend. Programul: Luni-Vineri');\n}\n\n// 3. Check working hours (09:00-18:00)\nif (hour < 9 || hour >= 18) {\n  errors.push('Programul clinicii: nouă - optsprezece');\n}\n\n// 4. Check 30-minute slots\nif (minute !== 0 && minute !== 30) {\n  errors.push('Programări doar la ore întregi sau la jumătate (09:00, 09:30, etc)');\n}\n\n// 5. Check if time is in past for today\nif (selectedDate.getTime() === today.getTime()) {\n  const requestedDateTime = new Date(bucharestTime);\n  requestedDateTime.setHours(hour, minute, 0, 0);\n  if (requestedDateTime <= bucharestTime) {\n    const nextHour = bucharestTime.getHours() + 2;\n    errors.push(`Ora ${data.preferred_time} a trecut. Alegeți după ora ${nextHour.toString().padStart(2, '0')}:00`);\n  }\n}\n\nif (errors.length > 0) {\n  return {\n    json: {\n      valid: false,\n      error_message: errors.join('. ') + '.'\n    }\n  };\n}\n\n// Calculate end time (1 hour appointment)\nconst endHour = (hour + 1).toString().padStart(2, '0');\nconst endMinute = minute.toString().padStart(2, '0');\n\nreturn {\n  json: {\n    valid: true,\n    patient_name: data.patient_name,\n    service_type: data.service_type,\n    phone_number: data.phone_number,\n    notes: data.notes,\n    preferred_date: data.preferred_date,\n    preferred_time: data.preferred_time,\n    startDateTime: `${data.preferred_date}T${data.preferred_time}:00`,\n    endDateTime: `${data.preferred_date}T${endHour}:${endMinute}:00`,\n    timeZone: 'Europe/Bucharest',\n    summary: `${data.service_type} - ${data.patient_name}`,\n    description: `Telefon: ${data.phone_number}\\nServiciu: ${data.service_type}\\nNote: ${data.notes || 'N/A'}`,\n    tool_call_id: data.tool_call_id\n  }\n};"
+        "jsCode": "// VALIDARE DATĂ ȘI ORĂ (Europe/Bucharest)\nconst DateTime = global.DateTime;\nif (!DateTime) {\n  throw new Error('Luxon DateTime nu este disponibil.');\n}\n\nconst zone = 'Europe/Bucharest';\nconst data = $input.item.json;\n\nconst errors = new Set();\nconst messages = [];\n\nconst requiredFields = ['patient_name', 'service_type', 'preferred_date', 'preferred_time', 'tool_call_id'];\nfor (const field of requiredFields) {\n  if (data[field] === undefined) {\n    throw new Error(`Lipsește câmpul obligatoriu: ${field}`);\n  }\n}\n\nconst today = DateTime.now().setZone(zone).startOf('day');\nconst appointmentDate = DateTime.fromISO(data.preferred_date, { zone });\nif (!appointmentDate.isValid) {\n  errors.add('format_dată');\n}\n\nconst timeParts = (data.preferred_time || '').split(':');\nconst hour = Number(timeParts[0]);\nconst minute = Number(timeParts[1]);\nif (timeParts.length !== 2 || Number.isNaN(hour) || Number.isNaN(minute)) {\n  errors.add('format_oră');\n}\n\nconst appointmentDateTime = DateTime.fromISO(`${data.preferred_date}T${data.preferred_time}`, { zone });\n\nif (appointmentDate.isValid && appointmentDate < today) {\n  errors.add('dată_trecut');\n}\n\nconst isWeekend = appointmentDate.isValid && [6, 7].includes(appointmentDate.weekday);\nif (isWeekend) {\n  errors.add('weekend');\n}\n\nconst HOLIDAYS = new Set(['2025-01-01','2025-01-02','2025-04-20','2025-04-21','2025-05-01','2025-06-01','2025-06-08','2025-06-09','2025-08-15','2025-11-30','2025-12-01','2025-12-25','2025-12-26']);\nif (appointmentDate.isValid && HOLIDAYS.has(appointmentDate.toISODate())) {\n  errors.add('sărbătoare');\n}\n\nif (!Number.isNaN(hour) && !Number.isNaN(minute)) {\n  if (hour < 10 || hour > 20 || (minute !== 0 && minute !== 30) || (hour === 20 && minute !== 0)) {\n    errors.add('ora_program');\n  }\n}\n\nif (appointmentDate.isValid && appointmentDate.equals(today) && appointmentDateTime.isValid) {\n  const now = DateTime.now().setZone(zone);\n  if (appointmentDateTime <= now.plus({ minutes: 5 })) {\n    errors.add('ora_trecut');\n  }\n}\n\nif (errors.size > 0) {\n  if ([...errors].some(key => ['dată_trecut', 'weekend', 'sărbătoare'].includes(key))) {\n    messages.push('Eroare: Data solicitată nu este validă (weekend/trecut/sărbătoare). Vă rog să alegeți o altă dată între luni și vineri.');\n  }\n  if (errors.has('ora_program')) {\n    messages.push('Eroare: Ora solicitată este în afara programului (zece - douăzeci, la ore întregi sau jumătate).');\n  }\n  if (errors.has('ora_trecut')) {\n    messages.push('Eroare: Ora selectată a trecut deja astăzi. Alegeți un interval mai târziu.');\n  }\n  if (errors.has('format_dată') || errors.has('format_oră')) {\n    messages.push('Eroare: Format invalid pentru dată sau oră. Folosiți YYYY-MM-DD și HH:MM.');\n  }\n  return {\n    json: {\n      valid: false,\n      error_message: messages.join(' ')\n    }\n  };\n}\n\nconst startDateTime = appointmentDateTime.set({ second: 0, millisecond: 0 });\nconst endDateTime = startDateTime.plus({ minutes: 60 });\nconst startIso = startDateTime.toISO({ suppressMilliseconds: true, includeOffset: false });\nconst endIso = endDateTime.toISO({ suppressMilliseconds: true, includeOffset: false });\n\nreturn {\n  json: {\n    valid: true,\n    patient_name: data.patient_name,\n    service_type: data.service_type,\n    phone_number: data.phone_number,\n    notes: data.notes || '',\n    preferred_date: data.preferred_date,\n    preferred_time: data.preferred_time,\n    startDateTime: startIso,\n    endDateTime: endIso,\n    timeZone: zone,\n    summary: `${data.service_type} - ${data.patient_name}`,\n    description: `Telefon: ${data.phone_number}\nServiciu: ${data.service_type}\nNote: ${data.notes || 'N/A'}`,\n    tool_call_id: data.tool_call_id\n  }\n};"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -161,8 +161,8 @@
         16
       ],
       "id": "dc974f33-32c7-4d4d-8b0f-78becb626f8f",
-      "name": "Validate Business Rules",
-      "notes": "Date/time validation, working hours, past dates"
+      "name": "Validate Date & Time",
+      "notes": "Validare dată/oră, weekend, sărbători, program 10-20"
     },
     {
       "parameters": {
@@ -257,7 +257,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// CONFLICT DETECTION (optimized)\nconst appointmentData = $('Validate Business Rules').item.json;\nconst allEvents = $input.all();\n\n// Check if no events (empty array or single empty object)\nconst hasEvents = allEvents.length > 0 && !(allEvents.length === 1 && Object.keys(allEvents[0].json).length === 0);\n\nif (!hasEvents) {\n  return {\n    json: {\n      conflict: false,\n      slot_available: true,\n      ...appointmentData\n    }\n  };\n}\n\nconst [reqHour, reqMin] = appointmentData.preferred_time.split(':').map(Number);\nconst requestedStartMinutes = reqHour * 60 + reqMin;\nconst requestedEndMinutes = requestedStartMinutes + 60;\n\nfor (const item of allEvents) {\n  const event = item.json;\n  if (!event.start?.dateTime) continue;\n  \n  // Parse event time (direct from ISO string, timezone-safe)\n  const eventTimePart = event.start.dateTime.split('T')[1].split('+')[0].split('-')[0];\n  const [eventHour, eventMin] = eventTimePart.split(':').map(Number);\n  const eventStartMinutes = eventHour * 60 + eventMin;\n  \n  const eventEndTimePart = event.end.dateTime.split('T')[1].split('+')[0].split('-')[0];\n  const [eventEndHour, eventEndMin] = eventEndTimePart.split(':').map(Number);\n  const eventEndMinutes = eventEndHour * 60 + eventEndMin;\n  \n  // Check overlap\n  const overlaps = requestedStartMinutes < eventEndMinutes && requestedEndMinutes > eventStartMinutes;\n  \n  if (overlaps) {\n    return {\n      json: {\n        conflict: true,\n        slot_available: false,\n        conflict_message: `Ora ${appointmentData.preferred_time} este deja ocupată. Alegeți altă oră.`,\n        tool_call_id: appointmentData.tool_call_id\n      }\n    };\n  }\n}\n\nreturn {\n  json: {\n    conflict: false,\n    slot_available: true,\n    ...appointmentData\n  }\n};"
+        "jsCode": "// CONFLICT DETECTION (optimized)\nconst appointmentData = $('Validate Date & Time').item.json;\nconst allEvents = $input.all();\n\n// Check if no events (empty array or single empty object)\nconst hasEvents = allEvents.length > 0 && !(allEvents.length === 1 && Object.keys(allEvents[0].json).length === 0);\n\nif (!hasEvents) {\n  return {\n    json: {\n      conflict: false,\n      slot_available: true,\n      ...appointmentData\n    }\n  };\n}\n\nconst [reqHour, reqMin] = appointmentData.preferred_time.split(':').map(Number);\nconst requestedStartMinutes = reqHour * 60 + reqMin;\nconst requestedEndMinutes = requestedStartMinutes + 60;\n\nfor (const item of allEvents) {\n  const event = item.json;\n  if (!event.start?.dateTime) continue;\n  \n  // Parse event time (direct from ISO string, timezone-safe)\n  const eventTimePart = event.start.dateTime.split('T')[1].split('+')[0].split('-')[0];\n  const [eventHour, eventMin] = eventTimePart.split(':').map(Number);\n  const eventStartMinutes = eventHour * 60 + eventMin;\n  \n  const eventEndTimePart = event.end.dateTime.split('T')[1].split('+')[0].split('-')[0];\n  const [eventEndHour, eventEndMin] = eventEndTimePart.split(':').map(Number);\n  const eventEndMinutes = eventEndHour * 60 + eventEndMin;\n  \n  // Check overlap\n  const overlaps = requestedStartMinutes < eventEndMinutes && requestedEndMinutes > eventStartMinutes;\n  \n  if (overlaps) {\n    return {\n      json: {\n        conflict: true,\n        slot_available: false,\n        conflict_message: `Ora ${appointmentData.preferred_time} este deja ocupată. Alegeți altă oră.`,\n        tool_call_id: appointmentData.tool_call_id\n      }\n    };\n  }\n}\n\nreturn {\n  json: {\n    conflict: false,\n    slot_available: true,\n    ...appointmentData\n  }\n};"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -522,17 +522,6 @@
         ]
       ]
     },
-    "Validate Business Rules": {
-      "main": [
-        [
-          {
-            "node": "Check Validation",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Check Validation": {
       "main": [
         [
@@ -649,6 +638,17 @@
     "Send SMS via Twilio": {
       "main": [
         []
+      ]
+    },
+    "Validate Date & Time": {
+      "main": [
+        [
+          {
+            "node": "Check Validation",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     }
   },

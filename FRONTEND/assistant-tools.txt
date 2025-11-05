@@ -1,6 +1,6 @@
 nume functie: create_appointment
 
-descriere functie: Creează o programare nouă la clinica dentară. Folosește această funcție DOAR după ce ai colectat TOATE informațiile necesare de la pacient: numele complet, tipul de serviciu dorit, și data/ora preferată. Numărul de telefon vine automat din {{customer.number}} (nu trebuie colectat de la pacient).
+descriere functie: Creează o programare nouă în calendar. Necesită nume, serviciu, dată (YYYY-MM-DD) și oră (HH:MM).
 
 json schema functie:
 

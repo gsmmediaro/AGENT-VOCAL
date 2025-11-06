@@ -8,19 +8,15 @@ json schema functie:
   "type": "object",
   "properties": {
     "notes": {
-      "description": "Note opționale despre programare (ex: 'prima vizită', 'durere molar stânga', 'pacient anxios')",
+      "description": "Note opționale (ex: 'prima vizită', 'pacient anxios'). OPȚIONAL.",
       "type": "string"
     },
     "patient_name": {
-      "description": "Numele complet al pacientului (ex: Ion Popescu). Asigură-te că ai înțeles corect numele.",
-      "type": "string"
-    },
-    "phone_number": {
-      "description": "!!! ACEST CÂMP NU SE CERE. Este doar pentru testare din chat. Numărul real vine automat.",
+      "description": "Numele complet al pacientului (ex: Ion Popescu). OBLIGATORIU.",
       "type": "string"
     },
     "service_type": {
-      "description": "Tipul de serviciu dentar solicitat",
+      "description": "Tipul de serviciu dentar solicitat. OBLIGATORIU.",
       "type": "string",
       "enum": [
         "Consultație",
@@ -36,11 +32,11 @@ json schema functie:
       ]
     },
     "preferred_date": {
-      "description": "Data dorită pentru programare în format YYYY-MM-DD (ex: 2025-10-30). Dacă pacientul spune 'mâine', 'luni viitoare', calculează data corectă.",
+      "description": "Data programării în format YYYY-MM-DD (ex: 2025-11-06). Calculează corect pentru 'mâine', 'luni', etc. OBLIGATORIU.",
       "type": "string"
     },
     "preferred_time": {
-      "description": "Ora dorită pentru programare în format HH:MM (ex: 14:00, 09:30). Acceptă doar ore întregi sau la jumătate (09:00, 09:30, 10:00, etc). Program clinică: 09:00-18:00.",
+      "description": "Ora programării în format HH:MM (ex: 14:00, 09:30). Doar ore întregi sau la jumătate. Program: 10:00-20:00. OBLIGATORIU.",
       "type": "string"
     }
   },

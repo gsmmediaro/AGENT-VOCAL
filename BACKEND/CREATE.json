@@ -227,9 +227,8 @@
           "mode": "list",
           "cachedResultName": "Clinica DIamed"
         },
-        "limit": 20,
-        "timeMin": "={{ $json.preferred_date }}T00:00:00",
-        "timeMax": "={{ $json.preferred_date }}T23:59:59",
+        "timeMin": "={{ $json.preferred_date }}T10:00:00",
+        "timeMax": "={{ $json.preferred_date }}T20:00:00",
         "options": {
           "orderBy": "startTime",
           "timeZone": {
@@ -656,7 +655,7 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "c69e122e-188b-4b39-92df-c6c56a0c839e",
+  "versionId": "01a4ccee-7d00-45ac-9a94-b096e740d050",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "8b288455c98dd89b1683c1f42341ee1e9b37a04d731a8c359e81baed65b07cec"

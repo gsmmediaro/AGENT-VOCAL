@@ -389,22 +389,7 @@
       "name": "Prepare Delete Data"
     }
   ],
-  "pinData": {
-    "Workflow Trigger": [
-      {
-        "json": {
-          "function_name": "cancel_appointment",
-          "arguments": {
-            "patient_name": "Vasile Ștefan",
-            "phone_number": "0720496033"
-          },
-          "tool_call_id": "call_OWOFTUXvkLOGTaT7qxs5FJOa",
-          "call_id": "019a3e8d-9c4c-7334-8c86-70a514b4e109",
-          "customer_number": "+40720496033"
-        }
-      }
-    ]
-  },
+  "pinData": {},
   "connections": {
     "Workflow Trigger": {
       "main": [
@@ -562,7 +547,7 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "9dfe7f10-7280-4104-b5ff-4ed67000c54e",
+  "versionId": "fb35d69a-f606-49f4-94ef-fb47a58e61cb",
   "meta": {
     "instanceId": "8b288455c98dd89b1683c1f42341ee1e9b37a04d731a8c359e81baed65b07cec"
   },

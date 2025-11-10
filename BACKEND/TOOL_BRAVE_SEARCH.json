@@ -1,0 +1,282 @@
+{
+  "name": "TOOL_BRAVE_SEARCH",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        -880,
+        96
+      ],
+      "id": "workflow-trigger-brave",
+      "name": "Workflow Trigger"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "clientConfig",
+              "name": "clientConfig",
+              "value": "={{ $json.clientConfig }}",
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -656,
+        96
+      ],
+      "id": "extract-client-config-brave",
+      "name": "Extract Client Config",
+      "notes": "Extracts clientConfig passed from MAIN workflow"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "query",
+              "name": "query",
+              "value": "={{ $json.query }}",
+              "type": "string"
+            },
+            {
+              "id": "tool_call_id",
+              "name": "tool_call_id",
+              "value": "={{ $json.tool_call_id }}",
+              "type": "string"
+            },
+            {
+              "id": "clientConfig",
+              "name": "clientConfig",
+              "value": "={{ $('Extract Client Config').item.json.clientConfig }}",
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -432,
+        96
+      ],
+      "id": "normalize-input-brave",
+      "name": "Normalize Input"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.query }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -208,
+        96
+      ],
+      "id": "validate-query-brave",
+      "name": "Validate Query"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "error",
+              "name": "results",
+              "value": "={{ [{\"toolCallId\": $json.tool_call_id, \"result\": \"Vă rog să specificați un query pentru căutare.\"}] }}",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        240,
+        192
+      ],
+      "id": "error-missing-query-brave",
+      "name": "Error: Missing Query"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.search.brave.com/res/v1/web/search",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "braveSearchApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ $json.query }}"
+            },
+            {
+              "name": "count",
+              "value": "5"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        16,
+        0
+      ],
+      "id": "brave-search-api-call",
+      "name": "Brave Search API",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process Brave Search results and format for voice assistant\nconst inputData = $('Normalize Input').item.json;\nconst searchResults = $input.first().json;\nconst toolCallId = inputData.tool_call_id;\nconst query = inputData.query;\n\n// Check if we have web results\nif (!searchResults.web || !searchResults.web.results || searchResults.web.results.length === 0) {\n  return {\n    json: {\n      results: [\n        {\n          toolCallId: toolCallId,\n          result: `Nu am găsit rezultate pentru căutarea \"${query}\".`\n        }\n      ]\n    }\n  };\n}\n\n// Extract top 3 results for voice-friendly response\nconst topResults = searchResults.web.results.slice(0, 3);\n\n// Format results in a conversational way\nconst formattedResults = topResults.map((result, index) => {\n  return `${index + 1}. ${result.title} - ${result.description || 'Fără descriere disponibilă'}.`;\n});\n\nconst voiceResponse = `Am găsit ${searchResults.web.results.length} rezultate pentru \"${query}\". Iată primele trei: ${formattedResults.join(' ')}`;\n\nreturn {\n  json: {\n    results: [\n      {\n        toolCallId: toolCallId,\n        result: voiceResponse\n      }\n    ],\n    query: query,\n    total_results: searchResults.web.results.length,\n    top_results: topResults.map(r => ({\n      title: r.title,\n      url: r.url,\n      description: r.description\n    }))\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ],
+      "id": "format-brave-results",
+      "name": "Format Search Results",
+      "notes": "Formats Brave Search results for voice assistant"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        464,
+        96
+      ],
+      "id": "merge-outputs-brave",
+      "name": "Merge Outputs"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Extract Client Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Client Config": {
+      "main": [
+        [
+          {
+            "node": "Normalize Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Input": {
+      "main": [
+        [
+          {
+            "node": "Validate Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Query": {
+      "main": [
+        [
+          {
+            "node": "Brave Search API",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error: Missing Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error: Missing Query": {
+      "main": [
+        [
+          {
+            "node": "Merge Outputs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Brave Search API": {
+      "main": [
+        [
+          {
+            "node": "Format Search Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Search Results": {
+      "main": [
+        [
+          {
+            "node": "Merge Outputs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "brave-search-v1-multitenant",
+  "meta": {
+    "instanceId": "8b288455c98dd89b1683c1f42341ee1e9b37a04d731a8c359e81baed65b07cec"
+  },
+  "id": "TOOL_BRAVE_SEARCH_ID",
+  "tags": []
+}

@@ -1,0 +1,248 @@
+{
+  "name": "TOOL_MCP_PLAYWRIGHT",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        -880,
+        96
+      ],
+      "id": "workflow-trigger-playwright",
+      "name": "Workflow Trigger"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "clientConfig",
+              "name": "clientConfig",
+              "value": "={{ $json.clientConfig }}",
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -656,
+        96
+      ],
+      "id": "extract-client-config-playwright",
+      "name": "Extract Client Config",
+      "notes": "Extracts clientConfig passed from MAIN workflow"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "urlToScrape",
+              "name": "urlToScrape",
+              "value": "={{ $json.urlToScrape }}",
+              "type": "string"
+            },
+            {
+              "id": "tool_call_id",
+              "name": "tool_call_id",
+              "value": "={{ $json.tool_call_id }}",
+              "type": "string"
+            },
+            {
+              "id": "clientConfig",
+              "name": "clientConfig",
+              "value": "={{ $('Extract Client Config').item.json.clientConfig }}",
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -432,
+        96
+      ],
+      "id": "normalize-input-playwright",
+      "name": "Normalize Input"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.urlToScrape }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            },
+            {
+              "leftValue": "={{ $json.urlToScrape }}",
+              "rightValue": "^https?://",
+              "operator": {
+                "type": "string",
+                "operation": "regex"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -208,
+        96
+      ],
+      "id": "validate-url-playwright",
+      "name": "Validate URL"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "error",
+              "name": "results",
+              "value": "={{ [{\"toolCallId\": $json.tool_call_id, \"result\": \"URL invalid. Vă rog să furnizați un URL valid care începe cu http:// sau https://.\"}] }}",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        240,
+        192
+      ],
+      "id": "error-invalid-url-playwright",
+      "name": "Error: Invalid URL"
+    },
+    {
+      "parameters": {
+        "jsCode": "// MCP PLAYWRIGHT WEB SCRAPING\n// Note: This is a placeholder implementation.\n// In production, you would integrate with actual MCP Playwright service\n\nconst inputData = $('Normalize Input').item.json;\nconst urlToScrape = inputData.urlToScrape;\nconst toolCallId = inputData.tool_call_id;\n\n// For demo purposes, we'll simulate a scraping result\n// In production, this would call the actual MCP Playwright API or service\n\ntry {\n  // Simulate MCP Playwright call\n  // In production, you would use:\n  // - HTTP Request to MCP Playwright server\n  // - Or direct Playwright node if available in n8n\n  \n  // Example response structure:\n  const scrapedData = {\n    url: urlToScrape,\n    title: \"Scraped Page Title\",\n    content: \"This is placeholder content from the scraped page. In production, this would contain actual scraped data.\",\n    meta: {\n      description: \"Meta description of the page\",\n      keywords: \"keyword1, keyword2, keyword3\"\n    },\n    links: [\n      { text: \"Link 1\", href: \"https://example.com/link1\" },\n      { text: \"Link 2\", href: \"https://example.com/link2\" }\n    ]\n  };\n  \n  // Format for voice assistant\n  const voiceResponse = `Am accesat ${urlToScrape}. Titlul paginii este: ${scrapedData.title}. ${scrapedData.content.substring(0, 200)}...`;\n  \n  return {\n    json: {\n      results: [\n        {\n          toolCallId: toolCallId,\n          result: voiceResponse\n        }\n      ],\n      url: urlToScrape,\n      scraped_data: scrapedData\n    }\n  };\n} catch (error) {\n  return {\n    json: {\n      results: [\n        {\n          toolCallId: toolCallId,\n          result: `Eroare la accesarea paginii ${urlToScrape}: ${error.message}`\n        }\n      ]\n    }\n  };\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        16,
+        0
+      ],
+      "id": "mcp-playwright-scrape",
+      "name": "MCP Playwright Scrape",
+      "notes": "PLACEHOLDER: Replace with actual MCP Playwright integration"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        240,
+        96
+      ],
+      "id": "merge-outputs-playwright",
+      "name": "Merge Outputs"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Extract Client Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Client Config": {
+      "main": [
+        [
+          {
+            "node": "Normalize Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Input": {
+      "main": [
+        [
+          {
+            "node": "Validate URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate URL": {
+      "main": [
+        [
+          {
+            "node": "MCP Playwright Scrape",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error: Invalid URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error: Invalid URL": {
+      "main": [
+        [
+          {
+            "node": "Merge Outputs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MCP Playwright Scrape": {
+      "main": [
+        [
+          {
+            "node": "Merge Outputs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "mcp-playwright-v1-multitenant",
+  "meta": {
+    "instanceId": "8b288455c98dd89b1683c1f42341ee1e9b37a04d731a8c359e81baed65b07cec"
+  },
+  "id": "TOOL_MCP_PLAYWRIGHT_ID",
+  "tags": []
+}

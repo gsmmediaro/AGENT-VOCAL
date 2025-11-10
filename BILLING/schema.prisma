@@ -1,0 +1,131 @@
+// BILLING DATABASE SCHEMA
+// Multi-tenant invoice tracking for voice AI platform
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Factura {
+  id              Int       @id @default(autoincrement())
+  clientId        String
+  clientName      String
+  perioada        String    // Format: "YYYY-MM" (ex: "2025-11")
+
+  // Usage metrics
+  minuteTotale    Int       // Total minutes consumed
+  totalCalls      Int       @default(0) // Total number of calls
+  successfulCalls Int       @default(0) // Successful calls count
+
+  // Cost breakdown
+  costMinute      Float     // Cost only for minutes (minuteTotale * costPerMinut)
+  taxaFixa        Float     // Fixed monthly fee
+  totalDePlata    Float     // Total amount to pay (costMinute + taxaFixa)
+
+  // Billing details
+  status          String    @default("PENDING") // PENDING, PAID, OVERDUE, CANCELLED
+  dueDate         DateTime? // Payment due date
+  paidDate        DateTime? // Date when invoice was paid
+  paidAmount      Float?    // Amount actually paid
+
+  // Metadata
+  vapiAssistantId String    // Vapi assistant ID for reference
+  currency        String    @default("RON") // Currency code
+  notes           String?   // Optional notes
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([clientId, perioada])
+  @@index([clientId])
+  @@index([perioada])
+  @@index([status])
+  @@index([dueDate])
+}
+
+model UsageLog {
+  id              Int       @id @default(autoincrement())
+  clientId        String
+  vapiAssistantId String
+  callId          String    @unique
+
+  // Call details
+  startTime       DateTime
+  endTime         DateTime?
+  duration        Int?      // Duration in seconds
+  durationMinutes Float?    // Duration in minutes (for billing)
+
+  // Call metadata
+  customerNumber  String?   // Phone number of caller
+  callStatus      String?   // completed, failed, no-answer, busy, etc.
+  toolsUsed       String[]  // Array of tool names used in this call
+
+  // Cost tracking
+  cost            Float?    // Cost of this specific call
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([clientId])
+  @@index([vapiAssistantId])
+  @@index([startTime])
+  @@index([callStatus])
+}
+
+model Client {
+  id              Int       @id @default(autoincrement())
+  clientId        String    @unique
+  clientName      String
+  email           String?
+  phone           String?
+
+  // Billing configuration
+  taxaLunara      Float     // Fixed monthly fee
+  costPerMinut    Float     // Cost per minute
+  billingDay      Int       @default(1) // Day of month for billing (1-28)
+
+  // Status
+  active          Boolean   @default(true)
+  suspendedAt     DateTime?
+  suspensionReason String?
+
+  // Metadata
+  vapiAssistantId String    @unique
+  onboardedAt     DateTime  @default(now())
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([clientId])
+  @@index([active])
+}
+
+model PaymentTransaction {
+  id              Int       @id @default(autoincrement())
+  facturaId       Int       // Reference to Factura
+  clientId        String
+
+  // Transaction details
+  amount          Float
+  currency        String    @default("RON")
+  paymentMethod   String?   // card, transfer, cash, etc.
+  transactionId   String?   // External transaction ID
+
+  // Status
+  status          String    @default("PENDING") // PENDING, COMPLETED, FAILED, REFUNDED
+  processedAt     DateTime?
+
+  // Metadata
+  notes           String?
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([facturaId])
+  @@index([clientId])
+  @@index([status])
+}

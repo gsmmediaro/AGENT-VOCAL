@@ -1,0 +1,816 @@
+{
+  "name": "MAIN",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "appointment-functions",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -560,
+        112
+      ],
+      "id": "46a4024e-7670-4b8f-a43b-7dc39b14cb7b",
+      "name": "Webhook",
+      "webhookId": "e7c5c666-7d50-4c5d-a1c6-63e64cad5d8d"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "clientId",
+              "name": "clientId",
+              "value": "={{ $request.query.clientId || 'dr_serban' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -336,
+        112
+      ],
+      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "name": "Extract ClientID",
+      "notes": "Extracts clientId from query parameter (defaults to dr_serban for testing)"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.context7.com/v1/search",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "context7Api",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "={{ \"clientId:\" + $json.clientId }}"
+            },
+            {
+              "name": "limit",
+              "value": "1"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -112,
+        112
+      ],
+      "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+      "name": "Get Client Config (Context7)",
+      "notes": "Fetches client configuration from Context7 based on clientId",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "clientConfig",
+              "name": "clientConfig",
+              "value": "={{ $json.results && $json.results[0] ? $json.results[0].document : { clientId: $('Extract ClientID').item.json.clientId, error: 'Client not found' } }}",
+              "type": "object"
+            },
+            {
+              "id": "clientId",
+              "name": "clientId",
+              "value": "={{ $('Extract ClientID').item.json.clientId }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        112,
+        112
+      ],
+      "id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
+      "name": "Parse Client Config",
+      "notes": "Extracts the document from Context7 response and validates"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "function_name",
+              "name": "function_name",
+              "value": "={{ $json.body.message.toolCalls[0].function.name }}",
+              "type": "string"
+            },
+            {
+              "id": "arguments",
+              "name": "arguments",
+              "value": "={{ $json.body.message.toolCalls[0].function.arguments }}",
+              "type": "object"
+            },
+            {
+              "id": "tool_call_id",
+              "name": "tool_call_id",
+              "value": "={{ $json.body.message.toolCalls[0].id }}",
+              "type": "string"
+            },
+            {
+              "id": "call_id",
+              "name": "call_id",
+              "value": "={{ $json.body.message.call.id }}",
+              "type": "string"
+            },
+            {
+              "id": "customer_number",
+              "name": "customer_number",
+              "value": "={{ $json.body.message.call.customer.number }}",
+              "type": "string"
+            },
+            {
+              "id": "clientConfig",
+              "name": "clientConfig",
+              "value": "={{ $('Parse Client Config').item.json.clientConfig }}",
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        336,
+        112
+      ],
+      "id": "7450d231-265f-46b7-9b07-0e0f531c9985",
+      "name": "Extract Vapi Data",
+      "notes": "Extrage datele din payload-ul Vapi.ai (toolCalls structure) și atașează clientConfig"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.function_name }}",
+                    "rightValue": "create_appointment",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "0d802137-c385-45eb-8852-317f0c7e8484"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Create"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.function_name }}",
+                    "rightValue": "check_availability",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "dc14f348-cd8e-4436-8cd3-78c9db1e8564"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Check"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.function_name }}",
+                    "rightValue": "cancel_appointment",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "4df1e346-2dcc-4592-a531-c6f758d468f2"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Cancel"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.function_name }}",
+                    "rightValue": "brave_search",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "brave-search-condition"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "BraveSearch"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.function_name }}",
+                    "rightValue": "mcp_playwright",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "mcp-playwright-condition"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Playwright"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.3,
+      "position": [
+        560,
+        112
+      ],
+      "id": "1797195d-1455-4a43-acd4-b06d31664bba",
+      "name": "Route by Function"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "GTrXwIofc21r4dPv",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/GTrXwIofc21r4dPv",
+          "cachedResultName": "CREATE"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "clientConfig": "={{ $json.clientConfig }}",
+            "arguments": "={{ $json.arguments }}",
+            "tool_call_id": "={{ $json.tool_call_id }}",
+            "customer_number": "={{ $json.customer_number }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        784,
+        -80
+      ],
+      "id": "535c7966-6b63-43a0-a35c-6593e256c704",
+      "name": "Execute Create Appointment",
+      "notes": "Calls sub-workflow for appointment creation (with clientConfig)"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "PuW0xY3KeL2Xj2o5",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/PuW0xY3KeL2Xj2o5",
+          "cachedResultName": "CHECK"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "clientConfig": "={{ $json.clientConfig }}",
+            "arguments": "={{ $json.arguments }}",
+            "tool_call_id": "={{ $json.tool_call_id }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        784,
+        112
+      ],
+      "id": "155815b6-ca76-427c-b024-0ab2c030f498",
+      "name": "Execute Check Availability"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "zW7aEqe1RBAcRuft",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/zW7aEqe1RBAcRuft",
+          "cachedResultName": "CANCEL"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "clientConfig": "={{ $json.clientConfig }}",
+            "arguments": "={{ $json.arguments }}",
+            "tool_call_id": "={{ $json.tool_call_id }}",
+            "customer_number": "={{ $json.customer_number }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        784,
+        304
+      ],
+      "id": "a5ada18b-9a8e-4205-91b9-c469db2b70fa",
+      "name": "Execute Cancel Appointment"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.clientConfig.enabledTools && $json.clientConfig.enabledTools.includes('braveSearch') }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        784,
+        496
+      ],
+      "id": "brave-permission-check",
+      "name": "Check Brave Permission"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "TOOL_BRAVE_SEARCH_ID",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/TOOL_BRAVE_SEARCH_ID",
+          "cachedResultName": "TOOL_BRAVE_SEARCH"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "clientConfig": "={{ $json.clientConfig }}",
+            "query": "={{ $json.arguments.query }}",
+            "tool_call_id": "={{ $json.tool_call_id }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1008,
+        400
+      ],
+      "id": "brave-execute-workflow",
+      "name": "Execute Brave Search"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "permission_error",
+              "name": "results",
+              "value": "={{ [{\"toolCallId\": $json.tool_call_id, \"result\": \"Brave Search nu este activat pentru acest client.\"}] }}",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1008,
+        592
+      ],
+      "id": "brave-permission-denied",
+      "name": "Brave Permission Denied"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.clientConfig.enabledTools && $json.clientConfig.enabledTools.includes('mcpPlaywright') }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        784,
+        688
+      ],
+      "id": "playwright-permission-check",
+      "name": "Check Playwright Permission"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "TOOL_MCP_PLAYWRIGHT_ID",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/TOOL_MCP_PLAYWRIGHT_ID",
+          "cachedResultName": "TOOL_MCP_PLAYWRIGHT"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "clientConfig": "={{ $json.clientConfig }}",
+            "urlToScrape": "={{ $json.arguments.url }}",
+            "tool_call_id": "={{ $json.tool_call_id }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1008,
+        592
+      ],
+      "id": "playwright-execute-workflow",
+      "name": "Execute Playwright"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "permission_error",
+              "name": "results",
+              "value": "={{ [{\"toolCallId\": $json.tool_call_id, \"result\": \"MCP Playwright nu este activat pentru acest client.\"}] }}",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1008,
+        784
+      ],
+      "id": "playwright-permission-denied",
+      "name": "Playwright Permission Denied"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1232,
+        112
+      ],
+      "id": "72f823c9-a7db-4c12-947b-75fec7445ca4",
+      "name": "Respond to Webhook",
+      "notes": "Returns {results: [{toolCallId, result}]} to Vapi.ai"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Extract ClientID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract ClientID": {
+      "main": [
+        [
+          {
+            "node": "Get Client Config (Context7)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Client Config (Context7)": {
+      "main": [
+        [
+          {
+            "node": "Parse Client Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Client Config": {
+      "main": [
+        [
+          {
+            "node": "Extract Vapi Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Vapi Data": {
+      "main": [
+        [
+          {
+            "node": "Route by Function",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Function": {
+      "main": [
+        [
+          {
+            "node": "Execute Create Appointment",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Execute Check Availability",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Execute Cancel Appointment",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Check Brave Permission",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Check Playwright Permission",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Create Appointment": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Check Availability": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Cancel Appointment": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Brave Permission": {
+      "main": [
+        [
+          {
+            "node": "Execute Brave Search",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Brave Permission Denied",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Brave Search": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Brave Permission Denied": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Playwright Permission": {
+      "main": [
+        [
+          {
+            "node": "Execute Playwright",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Playwright Permission Denied",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Playwright": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Playwright Permission Denied": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "71785352-a40a-4325-8ab8-f69da3b114bc-refactored",
+  "meta": {
+    "instanceId": "8b288455c98dd89b1683c1f42341ee1e9b37a04d731a8c359e81baed65b07cec"
+  },
+  "id": "r642QRomKOxsz8hE",
+  "tags": []
+}

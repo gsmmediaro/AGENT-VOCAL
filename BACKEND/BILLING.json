@@ -1,0 +1,426 @@
+{
+  "name": "BILLING",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "monthsInterval",
+              "monthsInterval": 1
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -880,
+        96
+      ],
+      "id": "cron-trigger-monthly-billing",
+      "name": "Monthly Billing Trigger",
+      "notes": "Runs on the 1st day of every month at 00:00"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "current_month",
+              "name": "current_month",
+              "value": "={{ DateTime.now().minus({months: 1}).toFormat('yyyy-MM') }}",
+              "type": "string"
+            },
+            {
+              "id": "billing_date",
+              "name": "billing_date",
+              "value": "={{ DateTime.now().toISO() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -656,
+        96
+      ],
+      "id": "set-billing-period",
+      "name": "Set Billing Period",
+      "notes": "Calculates billing period (previous month)"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.context7.com/v1/search",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "context7Api",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "type:client"
+            },
+            {
+              "name": "limit",
+              "value": "100"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -432,
+        96
+      ],
+      "id": "get-all-clients-context7",
+      "name": "Get All Clients (Context7)",
+      "notes": "Fetches all active client configurations",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract and flatten client configurations\nconst response = $input.first().json;\nconst billingPeriod = $('Set Billing Period').item.json.current_month;\n\nif (!response.results || response.results.length === 0) {\n  return [];\n}\n\nconst clients = response.results.map(result => {\n  const doc = result.document || {};\n  return {\n    json: {\n      clientId: doc.clientId,\n      clientName: doc.clientName,\n      vapiAssistantId: doc.vapiAssistantId,\n      taxaLunara: doc.billingPlan?.taxaLunara || 0,\n      costPerMinut: doc.billingPlan?.costPerMinut || 0,\n      billingPeriod: billingPeriod,\n      active: doc.metadata?.active !== false\n    }\n  };\n});\n\n// Filter only active clients\nreturn clients.filter(c => c.json.active);"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -208,
+        96
+      ],
+      "id": "parse-clients",
+      "name": "Parse Client Configs",
+      "notes": "Extracts billing info from each client"
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        16,
+        96
+      ],
+      "id": "loop-over-clients",
+      "name": "Loop Over Clients"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.vapi.ai/call",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "vapiApi",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "assistantId",
+              "value": "={{ $json.vapiAssistantId }}"
+            },
+            {
+              "name": "timeRangeStart",
+              "value": "={{ DateTime.fromFormat($json.billingPeriod, 'yyyy-MM').startOf('month').toISO() }}"
+            },
+            {
+              "name": "timeRangeEnd",
+              "value": "={{ DateTime.fromFormat($json.billingPeriod, 'yyyy-MM').endOf('month').toISO() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        240,
+        96
+      ],
+      "id": "get-vapi-usage",
+      "name": "Get Vapi Usage",
+      "notes": "Fetches usage data from Vapi API for the billing period",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3
+    },
+    {
+      "parameters": {
+        "jsCode": "// Calculate billing totals from Vapi usage data\nconst clientData = $('Loop Over Clients').item.json;\nconst vapiResponse = $input.first().json;\n\n// Extract usage metrics\nlet totalMinutes = 0;\nlet totalCalls = 0;\nlet successfulCalls = 0;\n\nif (vapiResponse.data && Array.isArray(vapiResponse.data)) {\n  totalCalls = vapiResponse.data.length;\n  \n  vapiResponse.data.forEach(call => {\n    // Sum up duration in minutes\n    const durationSeconds = call.duration || 0;\n    totalMinutes += durationSeconds / 60;\n    \n    // Count successful calls\n    if (call.status === 'completed' || call.status === 'ended') {\n      successfulCalls++;\n    }\n  });\n}\n\n// Round minutes up to nearest whole number for billing\ntotalMinutes = Math.ceil(totalMinutes);\n\n// Calculate costs\nconst costMinute = totalMinutes * clientData.costPerMinut;\nconst taxaFixa = clientData.taxaLunara;\nconst totalDePlata = costMinute + taxaFixa;\n\n// Calculate due date (30 days from now)\nconst dueDate = DateTime.now().plus({ days: 30 }).toISO();\n\nreturn {\n  json: {\n    clientId: clientData.clientId,\n    clientName: clientData.clientName,\n    perioada: clientData.billingPeriod,\n    vapiAssistantId: clientData.vapiAssistantId,\n    \n    // Usage metrics\n    minuteTotale: totalMinutes,\n    totalCalls: totalCalls,\n    successfulCalls: successfulCalls,\n    \n    // Cost breakdown\n    costMinute: costMinute,\n    taxaFixa: taxaFixa,\n    totalDePlata: totalDePlata,\n    \n    // Billing details\n    status: 'PENDING',\n    dueDate: dueDate,\n    currency: 'RON'\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        464,
+        96
+      ],
+      "id": "calculate-invoice",
+      "name": "Calculate Invoice Totals",
+      "notes": "Processes usage data and calculates invoice amounts"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO \"Factura\" (\n  \"clientId\",\n  \"clientName\",\n  \"perioada\",\n  \"minuteTotale\",\n  \"totalCalls\",\n  \"successfulCalls\",\n  \"costMinute\",\n  \"taxaFixa\",\n  \"totalDePlata\",\n  \"status\",\n  \"dueDate\",\n  \"vapiAssistantId\",\n  \"currency\",\n  \"createdAt\",\n  \"updatedAt\"\n) VALUES (\n  '{{ $json.clientId }}',\n  '{{ $json.clientName }}',\n  '{{ $json.perioada }}',\n  {{ $json.minuteTotale }},\n  {{ $json.totalCalls }},\n  {{ $json.successfulCalls }},\n  {{ $json.costMinute }},\n  {{ $json.taxaFixa }},\n  {{ $json.totalDePlata }},\n  '{{ $json.status }}',\n  '{{ $json.dueDate }}',\n  '{{ $json.vapiAssistantId }}',\n  '{{ $json.currency }}',\n  NOW(),\n  NOW()\n)\nON CONFLICT (\"clientId\", \"perioada\") \nDO UPDATE SET\n  \"minuteTotale\" = {{ $json.minuteTotale }},\n  \"totalCalls\" = {{ $json.totalCalls }},\n  \"successfulCalls\" = {{ $json.successfulCalls }},\n  \"costMinute\" = {{ $json.costMinute }},\n  \"taxaFixa\" = {{ $json.taxaFixa }},\n  \"totalDePlata\" = {{ $json.totalDePlata }},\n  \"updatedAt\" = NOW()\nRETURNING *;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        688,
+        96
+      ],
+      "id": "save-invoice-postgres",
+      "name": "Save Invoice to DB",
+      "notes": "Inserts or updates invoice in PostgreSQL",
+      "credentials": {
+        "postgres": {
+          "id": "postgres-billing-credentials",
+          "name": "PostgreSQL Billing DB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "invoice_id",
+              "name": "invoice_id",
+              "value": "={{ $json.id }}",
+              "type": "number"
+            },
+            {
+              "id": "client_name",
+              "name": "client_name",
+              "value": "={{ $json.clientName }}",
+              "type": "string"
+            },
+            {
+              "id": "total_amount",
+              "name": "total_amount",
+              "value": "={{ $json.totalDePlata }}",
+              "type": "number"
+            },
+            {
+              "id": "period",
+              "name": "period",
+              "value": "={{ $json.perioada }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        912,
+        96
+      ],
+      "id": "format-invoice-summary",
+      "name": "Format Invoice Summary"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $('Loop Over Clients').context.noItemsLeft }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1136,
+        96
+      ],
+      "id": "check-loop-complete",
+      "name": "Loop Complete?"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1360,
+        0
+      ],
+      "id": "billing-complete",
+      "name": "Billing Complete"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1360,
+        192
+      ],
+      "id": "continue-loop",
+      "name": "Continue Loop",
+      "notes": "Returns to process next client"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Monthly Billing Trigger": {
+      "main": [
+        [
+          {
+            "node": "Set Billing Period",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Billing Period": {
+      "main": [
+        [
+          {
+            "node": "Get All Clients (Context7)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get All Clients (Context7)": {
+      "main": [
+        [
+          {
+            "node": "Parse Client Configs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Client Configs": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Clients",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Clients": {
+      "main": [
+        [
+          {
+            "node": "Get Vapi Usage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Vapi Usage": {
+      "main": [
+        [
+          {
+            "node": "Calculate Invoice Totals",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Invoice Totals": {
+      "main": [
+        [
+          {
+            "node": "Save Invoice to DB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Invoice to DB": {
+      "main": [
+        [
+          {
+            "node": "Format Invoice Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Invoice Summary": {
+      "main": [
+        [
+          {
+            "node": "Check Loop Complete?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Loop Complete?": {
+      "main": [
+        [
+          {
+            "node": "Billing Complete",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Continue Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Continue Loop": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Clients",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "billing-v1-multitenant",
+  "meta": {
+    "instanceId": "8b288455c98dd89b1683c1f42341ee1e9b37a04d731a8c359e81baed65b07cec"
+  },
+  "id": "BILLING_WORKFLOW_ID",
+  "tags": []
+}
